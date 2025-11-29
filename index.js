@@ -27,17 +27,40 @@ async function run() {
 
     const productsDB = client.db("productsDB");
     const productsCollection = productsDB.collection("products");
+    const bidsCollection = productsDB.collection("bids");
+    const users = productsDB.collection("users");
 
-    app.post("/products", async (req, res) => {
-      const newProduct = req.body;
-      const result = await productsCollection.insertOne(newProduct);
-      res.send(result);
+    // upsert user
+    app.post("/users", async (req, res) => {
+      const user = req.body;
+      const email = user.email;
+      const query = { email: email };
+
+      const existingUser = await users.findOne(query);
+      if (existingUser) {
+        return res.send({ message: "User already exists" });
+      } else {
+        const result = await users.insertOne(user);
+        res.send(result);
+      }
     });
 
     // get
     app.get("/products", async (req, res) => {
-      const cursor = productsCollection.find();
+      const query = {};
+      const email = req.query.email;
+      if (email) {
+        query.email = email;
+      }
+      const cursor = productsCollection.find(query);
       const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    // post
+    app.post("/products", async (req, res) => {
+      const newProduct = req.body;
+      const result = await productsCollection.insertOne(newProduct);
       res.send(result);
     });
 
@@ -70,6 +93,41 @@ async function run() {
       const id = req.params.id;
       const query = { _id: new ObjectId(id) };
       const result = await productsCollection.deleteOne(query);
+      res.send(result);
+    });
+
+    // bidsCollection
+    app.get("/bids", async (req, res) => {
+      const query = {};
+      const email = req.query.email;
+      if (email) {
+        query.buyer_email = email;
+      }
+      const cursor = bidsCollection.find(query);
+      const result = await cursor.toArray();
+      res.send(result);
+    });
+
+    // get single bid
+    app.get("/bids/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await bidsCollection.findOne(query);
+      res.send(result);
+    });
+
+    // bid post
+    app.post("/bids", async (req, res) => {
+      const newBid = req.body;
+      const result = await bidsCollection.insertOne(newBid);
+      res.send(result);
+    });
+
+    // bid remove
+    app.delete("/bids/:id", async (req, res) => {
+      const id = req.params.id;
+      const query = { _id: new ObjectId(id) };
+      const result = await bidsCollection.deleteOne(query);
       res.send(result);
     });
 
