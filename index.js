@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 require("dotenv").config();
+const jwt = require("jsonwebtoken");
 const { MongoClient, ServerApiVersion, ObjectId } = require("mongodb");
 const app = express();
 const admin = require("firebase-admin");
@@ -40,6 +41,27 @@ const verifyFireBaseToken = async (req, res, next) => {
   }
 };
 
+const verifyJWTToken = (req, res, next) => {
+  console.log("From JWT Token", req.headers);
+  const authorization = req.headers.authorization;
+  if (!authorization) {
+    return res.status(401).send({ message: "unauthorized access" });
+  }
+  const token = authorization.split(" ")[1];
+  if (!token) {
+    return res.status(401).send({ message: "unauthorized access" });
+  }
+
+  jwt.verify(token, process.env.JWT_SECRET, (err, decoded) => {
+    if (err) {
+      res.status(401).send({ message: "unauthorized access" });
+    }
+    console.log(decoded);
+    req.token_email = decoded.email;
+    next();
+  });
+};
+
 const uri = `mongodb+srv://${process.env.DB_User}:${process.env.DB_Pass}@cluster0.iphtjo4.mongodb.net/?appName=Cluster0`;
 
 app.get("/", (req, res) => {
@@ -76,6 +98,15 @@ async function run() {
         const result = await users.insertOne(user);
         res.send(result);
       }
+    });
+
+    // jwt related apis
+    app.post("/getToken", (req, res) => {
+      const loggedUser = req.body;
+      const token = jwt.sign(loggedUser, process.env.JWT_SECRET, {
+        expiresIn: "1h",
+      });
+      res.send({ token: token });
     });
 
     // get
@@ -138,11 +169,10 @@ async function run() {
       res.send(result);
     });
 
-    // bidsCollection
-    app.get("/bids", logger, verifyFireBaseToken, async (req, res) => {
-      // console.log("Token", req.headers);
-      const query = {};
+    // bids with custom jwt token
+    app.get("/bids", verifyJWTToken, async (req, res) => {
       const email = req.query.email;
+      const query = {};
       if (email) {
         if (email !== req.token_email) {
           return res.status(403).send({ message: "forbidden access" });
@@ -153,6 +183,21 @@ async function run() {
       const result = await cursor.toArray();
       res.send(result);
     });
+
+    // bidsCollection with firebase token verify
+    // app.get("/bids", logger, verifyFireBaseToken, async (req, res) => {
+    //   const query = {};
+    //   const email = req.query.email;
+    //   if (email) {
+    //     if (email !== req.token_email) {
+    //       return res.status(403).send({ message: "forbidden access" });
+    //     }
+    //     query.buyer_email = email;
+    //   }
+    //   const cursor = bidsCollection.find(query);
+    //   const result = await cursor.toArray();
+    //   res.send(result);
+    // });
 
     app.get(
       "/products/bids/:productId",
